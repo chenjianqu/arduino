@@ -1,0 +1,88 @@
+/******************************自动导航模式的实现******************************************/
+
+int flag_break=0;//用于在云台旋转时停止旋转
+void doAutoNavigation(int n){
+  flag_break=0;
+  int angle=ANGLE_PANTILT_BUTTON;
+  int angleMaxDistance=ANGLE_PANTILT_BUTTON;//距离最大的角度
+  int maxDistance=0;
+  //测试地点
+  int distance=getDistance();
+  Serial.print("distance:");
+  Serial.println(distance);
+  holderInitialize();
+  if(distance<MIN_DISTANCE){
+    carStop(); 
+    Serial.println("startScan");
+    for(;angle>0;angle-=5){
+      ptButtonServo.write(angle);
+      delay(100);
+      distance=getDistance();
+      delay(100);
+      if(distance>maxDistance){
+        maxDistance=distance;
+        angleMaxDistance=angle;
+      }
+      Serial.print("*");
+      if(Serial.read()==KEY_STOP){
+        flag_break=1;
+        stopAutoNavigation++;
+        break;
+      }
+    }
+    Serial.println(flag_break);
+    for(;angle<180;angle+=5){
+      ptButtonServo.write(angle);
+      delay(100);
+      distance=getDistance();
+      delay(100);
+      if(distance>maxDistance){
+        maxDistance=distance;
+        angleMaxDistance=angle;
+      }
+      Serial.print("*");
+      if(Serial.read()==KEY_STOP||flag_break==1){
+        flag_break==1;
+        break;
+      }
+    }
+    Serial.print("flag_break:");
+    Serial.println(flag_break);
+    for(;angle>ANGLE_PANTILT_BUTTON;angle-=5){
+      ptButtonServo.write(angle);
+      delay(100);
+      distance=getDistance();
+      delay(100);
+      if(distance>maxDistance){
+        maxDistance=distance;
+        angleMaxDistance=angle;
+      }
+      Serial.print("*");
+      if(Serial.read()==KEY_STOP||flag_break==1){
+        flag_break==1;
+        stopAutoNavigation++;
+        Serial.print("stopAutoNavigation:");
+        Serial.println(stopAutoNavigation);
+        Serial.flush();
+        break;
+      }
+    }
+    Serial.print("stopAutoNavigation:");
+    Serial.println(stopAutoNavigation);
+    if(angleMaxDistance<ANGLE_PANTILT_BUTTON){
+      carBack(50);
+      delay(200);
+      carRight(55);
+      delay(500);
+    }
+    else{
+      carBack(50);
+      delay(300);
+      carLeft(55);
+      delay(500);
+    }
+  }
+  else{
+    carForward(n);
+  }
+}
