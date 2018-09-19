@@ -20,22 +20,23 @@
 #define LRS_LeftRear_PIN 6
 #define LRS_RightRear_PIN 7
 #define SERVO_FRONT_PIN 9//舵机引脚
-#define SERVO_REAR_PIN 10 
+#define SERVO_REAR_PIN 10
 
 //舵机角度
 #define SERVO_FRONT_MIDDLE 50 //直行角度
 
 //PID输出角度极值
-#define SERVO_FRONT_LOWERLIMIT_1 -4.0  //小车往左转
-#define SERVO_FRONT_UPPERLIMIT_1 4.0   //小车往右转
-#define SERVO_FRONT_LOWERLIMIT_2 -2.0
-#define SERVO_FRONT_UPPERLIMIT_2 2.0
-#define SERVO_FRONT_LOWERLIMIT_3 -7.0
-#define SERVO_FRONT_UPPERLIMIT_3 7.0
+#define SERVO_FRONT_LOWERLIMIT_1 -5.0  //小车往左转
+#define SERVO_FRONT_UPPERLIMIT_1 5.0   //小车往右转
+#define SERVO_FRONT_LOWERLIMIT_2 -3.0
+#define SERVO_FRONT_UPPERLIMIT_2 3.0
+#define SERVO_FRONT_LOWERLIMIT_3 -10.0
+#define SERVO_FRONT_UPPERLIMIT_3 10.0
 
 //后舵机角度
 #define SERVO_REAR_ENABLE 60
 #define SERVO_REAR_DISABLE 71
+
 //转弯角度
 #define SERVO_LEFT SERVO_FRONT_MIDDLE-15
 #define SERVO_RIGHT SERVO_FRONT_MIDDLE+15
@@ -46,12 +47,12 @@
 
 //转弯参数
 #define CURVE_DISTANCE 150 //转弯状态持续距离
-#define CURVE_THRESHOLD 1350 //转弯状态触发阈值
-#define ANGLE_TURNLEFT SERVO_FRONT_MIDDLE-25 //左转弯
-#define ANGLE_TURNRIGHT SERVO_FRONT_MIDDLE+25 //右转弯
+#define CURVE_THRESHOLD 1200 //转弯状态触发阈值
+#define ANGLE_TURNLEFT SERVO_FRONT_MIDDLE-28 //左转弯
+#define ANGLE_TURNRIGHT SERVO_FRONT_MIDDLE+28 //右转弯
 
 //距离参数
-#define DISTANCE_START 600
+#define DISTANCE_START 500
 #define DISTANCE_UPHILL 1600
 
 //刹车阈值
@@ -69,9 +70,9 @@ VL53L0X LRS_RightFront;
 VL53L0X LRS_RightRear;
 
 //pid参数
-float Kp = 0.5;
-float Ki = 0.01;                                                      
-float Kd = 0.01;
+float Kp = 0.005;
+float Ki = 0.01;
+float Kd = 0.1;
 double Setpoint, Input, Output, ServoOutput; 
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
@@ -88,6 +89,8 @@ u16 velocity=0;//速度
 int dis=-1;//转弯距离兼标志位
 u8 curve_i=0;//转弯个数
 
+int dis1=-1;
+
 //外部中断,编码器计数
 void doEncoder()
 {
@@ -95,7 +98,8 @@ void doEncoder()
 }
 
 //速度函数
-void dovelocity(){
+void dovelocity()
+{
   velocity=encoderPos;
   Distance=Distance+velocity;
   singleDis+=velocity;
@@ -147,13 +151,19 @@ void loop()
   Distance_LR_RR=Distance_LeftRear-Distance_RightRear;
   Distance_LF_RF=Distance_LeftFront-Distance_RightFront; //左前-右前  
 
+  
+  
   //出现拐弯
-  if(Distance_LeftFront>CURVE_THRESHOLD)
+  if(Distance_LeftFront>CURVE_THRESHOLD&&dis1==-1)
   {
     dis=Distance+CURVE_DISTANCE;
+    dis1=Distance+2000;
     curve_i++;
     if(curve_i%2==0)singleDis=0;//单圈距离重置
   }
+
+  if(Distance>dis1&&dis1!=-1)
+    dis1=-1;
 
   //转弯状态
   if(dis!=-1)
@@ -165,38 +175,43 @@ void loop()
     }
     else
         dis=-1;
+    Serial.println("CURVE***");
   }
   else
   {//非转弯
+    
     if(curve_i%2==0)//当小车起点为坡底时,curve_i为偶数表示为有坡的半圈
     {//上坡半圈
       if(singleDis<DISTANCE_START)//发车
       { 
          BRAKE(velocity);//速度限制
-         PosFront=SERVO_FRONT_MIDDLE-getPID(SERVO_FRONT_LOWERLIMIT_1,SERVO_FRONT_UPPERLIMIT_1);
+         PosFront=SERVO_FRONT_MIDDLE+getPID(SERVO_FRONT_LOWERLIMIT_1,SERVO_FRONT_UPPERLIMIT_1);
        }
        else if(Distance<DISTANCE_UPHILL)//冲坡
        {
           servoRear.write(SERVO_REAR_ENABLE);//后舵机刹车
-          PosFront=SERVO_FRONT_MIDDLE-getPID(SERVO_FRONT_LOWERLIMIT_2,SERVO_FRONT_UPPERLIMIT_2);
+          PosFront=SERVO_FRONT_MIDDLE+getPID(SERVO_FRONT_LOWERLIMIT_2,SERVO_FRONT_UPPERLIMIT_2);
        }
        else//下坡
        {
           BRAKE(velocity);
-          PosFront=SERVO_FRONT_MIDDLE-getPID(SERVO_FRONT_LOWERLIMIT_1,SERVO_FRONT_UPPERLIMIT_1);
+          PosFront=SERVO_FRONT_MIDDLE+getPID(SERVO_FRONT_LOWERLIMIT_1,SERVO_FRONT_UPPERLIMIT_1);
        }
+       Serial.println("FIRST***");
     }//上坡半圈
     
     //避障半圈
     else
+    
     {
+      Serial.println("SENCOND***");
       BRAKE(velocity);  
       if(Distance_LR_RR>80)
         PosFront=SERVO_LEFT;
       else if(Distance_LR_RR<-80)
         PosFront=SERVO_RIGHT;
       else
-        PosFront=SERVO_FRONT_MIDDLE-getPID(SERVO_FRONT_LOWERLIMIT_3,SERVO_FRONT_UPPERLIMIT_3);
+        PosFront=SERVO_FRONT_MIDDLE+getPID(SERVO_FRONT_LOWERLIMIT_3,SERVO_FRONT_UPPERLIMIT_3);
     }//避障半圈
     
     servoFront.write(PosFront);
@@ -213,6 +228,8 @@ void loop()
   Serial.println(Distance_RightRear);
   Serial.print("dis:");
   Serial.println(dis);
+  Serial.print("dis1:");
+  Serial.println(dis1);
   Serial.print("Posfront:");
   Serial.println(PosFront);
   Serial.print("distance:");
